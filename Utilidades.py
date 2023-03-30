@@ -80,7 +80,7 @@ def directory_name_change(df_nombres: pd.DataFrame, df_data: pd.DataFrame, origi
         data_actual.to_csv(f'{path_carpeta_nueva}/{i}_boxes.txt', sep='\t', index=False)
 
 
-def data_generator(path:str, img_size: tuple = (32, 32)):
+def data_generator(path:str, img_size: tuple = (64, 64)):
     # Parámetros de la generación de imágenes
     datagen = ImageDataGenerator(
         rescale=1./255,
@@ -89,26 +89,27 @@ def data_generator(path:str, img_size: tuple = (32, 32)):
     data_generator_dir = datagen.flow_from_directory(
         path,
         target_size=img_size,
-        batch_size=32,
-        class_mode='categorical'
+        batch_size=128,
+        class_mode=None
     )
-
-
 
     # Función para cargar una imagen y su anotación
     def load_img_and_annotation(img_path):
         img = Image.open(img_path)
-        class_name = os.path.basename(os.path.dirname(img_path))
-        annotation_path = os.path.join(os.path.dirname(img_path), class_name + '_boxex.txt')
+        split_path = img_path.split('/')
+        new_path = ('/').join(split_path[:-2])
+        class_name = split_path[-3]
+        annotation_path = os.path.join(new_path, class_name + '_boxes.txt')
         # Cargando anotaciones (.txt)
         with open(annotation_path, 'r') as f:
-            annotation = f.read().strip()
+            annotations = f.read().strip()
         # Crear un diccionario con las anotaciones
-        # Forma {NombreImagen: [bounds (len_4)]}
+        # Forma {NombreImagen: [class, bounds(len=4)]}
         anotaciones_dic = {}
-        for linea in annotation.split('\n'):
+        for linea in annotations.split('\n'):
             temp = linea.split('\t')
             anotaciones_dic[temp[0]] = [class_name] + temp[1:]
+        annotation = anotaciones_dic[img_path.split('/')[-1]]
 
         return np.array(img), annotation
 
