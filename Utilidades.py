@@ -10,12 +10,7 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 import tensorflow as tf
-import tensorflow.keras as keras
-from tensorflow.keras import Model
-from tensorflow.data import AUTOTUNE
-from tensorflow.keras.utils import plot_model
-from tensorflow.keras.applications import VGG16, ResNet50
-from tensorflow.keras.layers import Input, Flatten, Dense
+import tensorflow.keras.backend as K
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 
@@ -96,6 +91,7 @@ def data_generator(path:str, img_size: tuple = (64, 64)):
     # Función para cargar una imagen y su anotación
     def load_img_and_annotation(img_path):
         img = Image.open(img_path)
+        img_path = img_path.replace('\\', '/')
         split_path = img_path.split('/')
         new_path = ('/').join(split_path[:-2])
         class_name = split_path[-3]
@@ -116,14 +112,50 @@ def data_generator(path:str, img_size: tuple = (64, 64)):
     # Función de generación de datos personalizada
     def generator(generator):
         while True:
-            batch_x, batch_y = generator.next()
             batch_x_processed = []
             batch_y_processed = []
-            for i in range(len(batch_x)):
-                img, annotation = load_img_and_annotation(batch_x[i])
+            for i, filename in enumerate(generator.filenames):
+                path_img = os.path.join(generator.directory, filename)
+                img, annotation = load_img_and_annotation(path_img)
                 batch_x_processed.append(img)
                 batch_y_processed.append(annotation)
             yield np.array(batch_x_processed), np.array(batch_y_processed)
 
     # Retorna el generador personalizado de datos
     return generator(data_generator_dir)
+
+
+
+# IoU Metric
+def iou_metric(y_true, y_pred):
+    """
+    Función de métrica personalizada para la métrica de IoU (Intersection over Union).
+    y_true: tensor de tamaño (batch_size, 4) que contiene las coordenadas de los bboxes verdaderos
+    y_pred: tensor de tamaño (batch_size, 4) que contiene las coordenadas de los bboxes predichos
+    """
+    # Definir las coordenadas de los bboxes verdaderos y predichos
+    xmin_true, ymin_true, xmax_true, ymax_true = K.split(y_true, 4)
+    xmin_pred, ymin_pred, xmax_pred, ymax_pred = K.split(y_pred, 4)
+    # Calcular las coordenadas de la intersección
+    xmin_inter = K.maximum(xmin_true, xmin_pred)
+    ymin_inter = K.maximum(ymin_true, ymin_pred)
+    xmax_inter = K.minimum(xmax_true, xmax_pred)
+    ymax_inter = K.minimum(ymax_true, ymax_pred)
+    # Calcular el área de la intersección
+    w_inter = K.maximum(0.0, xmax_inter - xmin_inter + 1.0)
+    h_inter = K.maximum(0.0, ymax_inter - ymin_inter + 1.0)
+    area_inter = w_inter * h_inter
+    # Calcular el área de las cajas verdaderas y predichas
+    w_true = xmax_true - xmin_true + 1.0
+    h_true = ymax_true - ymin_true + 1.0
+    area_true = w_true * h_true
+    w_pred = xmax_pred - xmin_pred + 1.0
+    h_pred = ymax_pred - ymin_pred + 1.0
+    area_pred = w_pred * h_pred
+    # Calcular el área de la unión
+    area_union = area_true + area_pred - area_inter
+    # Calcular la métrica IoU
+    iou = area_inter / K.maximum(area_union, 1e-7)
+    # Retornar el promedio de la métrica IoU sobre todo el batch
+    return K.mean(iou)
+
