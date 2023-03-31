@@ -2,6 +2,7 @@
 # -------------------------------------------------------------------------------------------------
 # Librerías
 import os
+import pickle
 import shutil
 import random
 import pathlib
@@ -75,7 +76,7 @@ def directory_name_change(df_nombres: pd.DataFrame, df_data: pd.DataFrame, origi
         data_actual.to_csv(f'{path_carpeta_nueva}/{i}_boxes.txt', sep='\t', index=False)
 
 
-def data_generator(path:str, img_size: tuple = (64, 64)):
+def data_generator(path:str, img_size: tuple = (64, 64, 3)):
     # Parámetros de la generación de imágenes
     datagen = ImageDataGenerator(
         rescale=1./255,
@@ -90,6 +91,8 @@ def data_generator(path:str, img_size: tuple = (64, 64)):
 
     # Función para cargar una imagen y su anotación
     def load_img_and_annotation(img_path):
+        with open(r"./Varios/Dict_Clases.pkl", "rb") as input_file:
+             dict_clases = pickle.load(input_file)
         img = Image.open(img_path)
         img_path = img_path.replace('\\', '/')
         split_path = img_path.split('/')
@@ -104,7 +107,10 @@ def data_generator(path:str, img_size: tuple = (64, 64)):
         anotaciones_dic = {}
         for linea in annotations.split('\n'):
             temp = linea.split('\t')
-            anotaciones_dic[temp[0]] = [class_name] + temp[1:]
+            clase = dict_clases.get(class_name)
+            if clase == None:
+                raise ValueError(f'La clase {class_name} no está en el diccionario de clases.')
+            anotaciones_dic[temp[0]] = [clase] + temp[1:]
         annotation = anotaciones_dic[img_path.split('/')[-1]]
 
         return np.array(img), annotation
